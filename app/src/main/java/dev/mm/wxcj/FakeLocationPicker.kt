@@ -112,7 +112,7 @@ object FakeLocationPicker {
         return runCatching {
             XposedBridge.hookMethod(method, object : XC_MethodHook() {
                 override fun afterHookedMethod(param: MethodHookParam) {
-                    runCatching { handleResult(param.args) }
+                    runCatching { handleResult(param) }
                         .onFailure { Logger.e(TAG, "处理选点结果出错", it) }
                 }
             })
@@ -122,7 +122,12 @@ object FakeLocationPicker {
         }.onFailure { Logger.e(TAG, "hook onActivityResult 失败", it) }.getOrDefault(false)
     }
 
-    private fun handleResult(args: Array<Any?>?) {
+    /**
+     * @param param [XC_MethodHook.MethodHookParam]：`args` 是 (requestCode, resultCode, data)，
+     *   `thisObject` 是收到结果的 Activity —— 发广播需要 Context，就从这里取。
+     */
+    private fun handleResult(param: XC_MethodHook.MethodHookParam) {
+        val args = param.args
         if (!pending) return
         val requestCode = args?.getOrNull(0) as? Int ?: return
         if (requestCode != REQUEST_CODE) return
@@ -135,9 +140,17 @@ object FakeLocationPicker {
         }
 
         val data = args.getOrNull(2) as? Intent ?: return
-        @Suppress("DEPRECATION")
-        val locationIntent = runCatching { data.getParcelableExtra(EXTRA_K_LOCATION) as? Parcelable }
-            .getOrNull()
+        val context = param.thisObject as? Context ?: ActivityUtils.topActivity()
+        if (context == null) {
+            fail("拿不到上下文，无法保存坐标")
+            return
+        }
+        // 走 XposedHelpers 反射而不是直接调 Intent.getParcelableExtra：
+        // 那个方法在 SDK 33 起带泛型 `<T : Parcelable?>`，直接调用要靠上下文推断 T，
+        // 写法稍不对就编译不过；反射调用稳定且行为一致。
+        val locationIntent = runCatching {
+            XposedHelpers.callMethod(data, "getParcelableExtra", EXTRA_K_LOCATION) as? Parcelable
+        }.getOrNull()
         if (locationIntent == null) {
             fail("选点结果里没有位置数据（KLocationIntent），可能版本不适配")
             return
@@ -157,7 +170,7 @@ object FakeLocationPicker {
             return
         }
 
-        applyPicked(data, lat, lng)
+        applyPicked(context, lat, lng)
     }
 
     /**
@@ -182,8 +195,13 @@ object FakeLocationPicker {
         return obj.toString()
     }
 
-    /** 保存坐标 + 打开开关 + 立刻在微信进程生效 + 通知模块进程落盘。 */
-    private fun applyPicked(context: Context, lat: Double, lng: Double) {
+    /**
+     * 保存坐标 + 打开开关 + 立刻在微信进程生效 + 通知模块进程落盘。
+     *
+     * @param context 只用于发广播，可以是 Activity 也可以是 Application；
+     *   拿不到就只改内存值（本次进程内照样生效，只是下次冷启动会丢失）。
+     */
+    private fun applyPicked(context: Context?, lat: Double, lng: Double) {
         pickedCount++
         lastError = null
 
@@ -194,14 +212,18 @@ object FakeLocationPicker {
 
         // 2) 通知模块进程写进 SharedPreferences —— 这样设置页打开看到的就是新坐标，
         //    下次冷启动 ContentProvider 也能读到。
-        runCatching {
-            val intent = Intent(Prefs.ACTION_LOCATION_PICKED).setPackage(Prefs.MODULE_PACKAGE)
-            intent.addFlags(Intent.FLAG_INCLUDE_STOPPED_PACKAGES)
-            intent.putExtra(Prefs.EXTRA_LAT, lat)
-            intent.putExtra(Prefs.EXTRA_LNG, lng)
-            intent.putExtra(Prefs.EXTRA_ENABLE, true)
-            context.sendBroadcast(intent)
-        }.onFailure { Logger.w(TAG, "通知模块进程失败：${it.message}") }
+        if (context != null) {
+            runCatching {
+                val intent = Intent(Prefs.ACTION_LOCATION_PICKED).setPackage(Prefs.MODULE_PACKAGE)
+                intent.addFlags(Intent.FLAG_INCLUDE_STOPPED_PACKAGES)
+                intent.putExtra(Prefs.EXTRA_LAT, lat)
+                intent.putExtra(Prefs.EXTRA_LNG, lng)
+                intent.putExtra(Prefs.EXTRA_ENABLE, true)
+                context.sendBroadcast(intent)
+            }.onFailure { Logger.w(TAG, "通知模块进程失败：${it.message}") }
+        } else {
+            Logger.w(TAG, "无上下文，坐标只在本次进程内生效")
+        }
 
         val text = String.format(Locale.US, "%.5f", lat) + ", " + String.format(Locale.US, "%.5f", lng)
         Logger.i(TAG, "已保存选点坐标：$text")
@@ -216,5 +238,5 @@ object FakeLocationPicker {
 
     /** 诊断用 */
     fun report(): String =
-        "选点入口：成功 $pickedCount 次" + (lastError?.let { "，最近失败：$it" } ?: "")
+        "地图选点：成功 $pickedCount 次" + (lastError?.let { "，最近失败：$it" } ?: "")
 }
