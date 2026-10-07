@@ -17,7 +17,7 @@
     <string name="fake_lat_hint">纬度（-90~90）</string>
     <string name="fake_lng_hint">经度（-180~180）</string>
     <string name="fake_jitter_hint">随机抖动（米），0 = 关闭</string>
-    <string name="fake_location_hint">坐标要自己填：在地图 App 里长按取点后抄过来，或用下面的常用位置 / 粘贴按钮。改坐标即时生效，不必重启微信</string>
+    <string name="fake_location_hint">最省事的做法：在微信任一聊天里点「+」打开面板，长按「位置」图标，用微信自己的地图选点（旧版微信也可在设置页「虚拟定位」那一行进入）。也可以手工填坐标，或用下面的常用位置 / 粘贴按钮。改坐标即时生效，不必重启微信</string>
     <string name="action_paste_coord">粘贴</string>
     <string name="paste_empty">剪贴板里没有可识别的坐标</string>
     <string name="paste_done">已填入：%1$s, %2$s</string>

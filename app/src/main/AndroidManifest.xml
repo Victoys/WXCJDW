@@ -32,6 +32,19 @@
         </receiver>
 
         <!--
+            微信地图里选完点后，微信进程把坐标发回来，由模块进程落盘。
+            exported=true：广播来自微信进程（另一个 uid），非 exported 收不到。
+        -->
+        <receiver
+            android:name=".LocationPickedReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="dev.mm.wxcj.LOCATION_PICKED" />
+            </intent-filter>
+        </receiver>
+
+        <!--
             配置跨进程读取：Android 10+ 上 /data/data/<包名> 是 700，
             微信无法直接读模块的 SharedPreferences 文件，必须走 Binder IPC。
             exported=true 是必须的，否则微信进程无权访问。

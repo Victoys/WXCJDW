@@ -36,6 +36,13 @@ class HookEntry : IXposedHookLoadPackage {
     @Volatile
     private var hostClassLoader: ClassLoader? = null
 
+    /**
+     * 承载微信业务类的真实 ClassLoader（baseContext 那个，Tinker 补丁后可能已被换掉）。
+     * 找微信自己的类（比如选点页 RedirectUI）要用它。
+     */
+    @Volatile
+    private var hostRealClassLoader: ClassLoader? = null
+
     /** 已装载的功能 key，避免重复 hook；配置刷新后只补装缺的。 */
     private val loadedKeys = ConcurrentHashMap.newKeySet<String>()
 
@@ -90,6 +97,8 @@ class HookEntry : IXposedHookLoadPackage {
         Notifier.attach(context, lpparam)
         // 系统层 hook（虚拟定位兜底）用的是框架给的这个 ClassLoader，先存下来
         hostClassLoader = lpparam.classLoader
+        // 找微信自己的类要用真正的业务 ClassLoader（见字段注释）
+        hostRealClassLoader = hostRealClassLoader ?: realClassLoader
 
         context?.let { ctx ->
             runCatching {
@@ -297,6 +306,7 @@ class HookEntry : IXposedHookLoadPackage {
                     "禁止输入状态：doScene 拦截 ${DisableTypingStatus.blockedCount} 次"
                 )
                 if (fake) Notifier.notify(FakeLocation.report())
+                if (fake) Notifier.notify(WeChatLocationEntry.report() + "｜" + FakeLocationPicker.report())
                 Notifier.notify(Probe.report() + "｜ClassLoader相同=$sameLoader")
                 Notifier.notify(Notifier.flushDiagnostics())
             }, "Wxcj-selftest").start()
@@ -395,12 +405,42 @@ class HookEntry : IXposedHookLoadPackage {
         }
 
         hostClassLoader?.let { installFakeLocationFallback(fake, it) }
+
+        // 选点入口：有了它就不用手填坐标 —— 长按聊天面板的「位置」图标，
+        // 直接拉起微信自己的腾讯地图选点页。
+        // 入口装不上只是「没法点选」，坐标替换本身照常工作，所以不进 badLabels。
+        if (fake) installLocationEntries(targets, okLabels)
     }
 
     /**
-     * 虚拟定位的系统层兜底：不依赖 DexKit（直接 hook Android 的 LocationManager），
-     * 所以放在这里单独装，没定位到微信回调时它仍可能生效。
+     * 装载虚拟定位的选点入口（长按聊天面板的「位置」图标）。
+     *
+     * 装不上也只是「没法点选」，坐标替换本身照常工作 —— 所以失败只写日志，
+     * 不进 badLabels，免得提示里出现误导性的「未生效」。
      */
+    private fun installLocationEntries(
+        targets: Map<String, List<Method>>,
+        okLabels: MutableList<String>,
+    ) {
+        if (!loadedKeys.add("locEntries")) return
+        // 找微信自己的类用真实业务 ClassLoader，拿不到再退回框架的
+        val cl = hostRealClassLoader ?: hostClassLoader
+        if (cl == null) {
+            loadedKeys.remove("locEntries")
+            return
+        }
+
+        val panel = targets[DexTargets.K_APP_GRID_GETVIEW].orEmpty()
+        val count = WeChatLocationEntry.install(panel, cl)
+
+        if (count > 0) {
+            okLabels += "选点(长按位置)"
+            return
+        }
+        loadedKeys.remove("locEntries")   // 允许以后重试（比如重扫后定位到了）
+        Logger.w(TAG, "选点入口未装载，只能在设置页手填坐标")
+    }
+
     private fun installFakeLocationFallback(enabled: Boolean, classLoader: ClassLoader) {
         if (!enabled) return
         if (!loadedKeys.add("fakeLocationSys")) return

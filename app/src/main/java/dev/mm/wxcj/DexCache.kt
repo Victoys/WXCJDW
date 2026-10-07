@@ -13,8 +13,9 @@ import android.content.Context
 object DexCache {
 
     // 改定位实现后请递增此版本号：旧缓存会自然失效，避免一直命中错误的解析结果
-    // 定位目标变化（v3: 移除朋友圈自动播放；v4: 新增 doRevokeMsg；v5: 新增虚拟定位 3 个回调）
-    private const val FILE = "wxcj_dex_v5"
+    // 定位目标变化（v3: 移除朋友圈自动播放；v4: 新增 doRevokeMsg；v5: 新增虚拟定位 3 个回调；
+    // v6: 新增选点入口 7 个目标，且缓存开始记录「确认不存在」的目标）
+    private const val FILE = "wxcj_dex_v6"
     private const val KEY_HOST = "hostVersion"
     private const val KEY_TOKEN = "rescanToken"
 
@@ -30,7 +31,9 @@ object DexCache {
         }
         val out = LinkedHashMap<String, String>()
         sp.all.forEach { (key, value) ->
-            if (key != KEY_HOST && key != KEY_TOKEN && value is String && value.contains("|")) out[key] = value
+            if (key == KEY_HOST || key == KEY_TOKEN || value !is String) return@forEach
+            // 空串 = 上次扫过、确认这个目标在当前微信版本里不存在（不再重复扫）
+            if (value.isEmpty() || value.contains("|")) out[key] = value
         }
         return if (out.isEmpty()) null else out
     }

@@ -53,8 +53,8 @@ object DexTargets {
     /** 单个目标最多 hook 几个候选，避免特征串过于泛化时挂上几十个方法拖慢微信 */
     private const val MAX_CANDIDATES = 4
 
-    /** 目标总数（2 个特殊目标 + METHOD_SPECS）。改动列表时记得同步这个值。 */
-    const val TOTAL = 7
+    /** 目标总数。改动列表时记得同步这个值。 */
+    const val TOTAL = 8
 
     /** 目标 key -> 中文名，用于把「哪个功能没定位到」直接显示给用户。 */
     fun labelOf(key: String): String = when (key) {
@@ -64,6 +64,7 @@ object DexTargets {
         K_PAT_DOUBLE_CLICK -> "禁用拍一拍"
         // 三个定位回调同属「虚拟定位」这一个功能，提示时会被去重成一条
         K_LOC_LISTENER, K_LOC_LISTENER_WGS84, K_LOC_DEFAULT_MANAGER -> "虚拟定位"
+        K_APP_GRID_GETVIEW -> "虚拟定位(选点入口)"
         else -> key
     }
 
@@ -81,6 +82,10 @@ object DexTargets {
 
     /** 虚拟定位用到的全部目标，HookEntry 会把它们的候选合并起来一起装 */
     val LOCATION_KEYS = listOf(K_LOC_LISTENER, K_LOC_LISTENER_WGS84, K_LOC_DEFAULT_MANAGER)
+
+    // ---- 选点入口 ----
+    /** 聊天面板（AppGrid）的 getView：用来认出「位置」那个格子并挂长按 */
+    const val K_APP_GRID_GETVIEW = "appGridGetView"
 
     // ---- 特征串 ----
 
@@ -100,12 +105,28 @@ object DexTargets {
         "autoAuth",
     )
 
+    /**
+     * 聊天面板 AppGrid 的 `getView`：WeKit 的指纹，用**包含**匹配
+     * （`MicroMsg.AppGrid` / `pos:` / `page:` 是日志里拼出来的，不是独立常量）。
+     */
+    private val APP_GRID_STRINGS = arrayOf("MicroMsg.AppGrid", "pos:", "page:")
+
     private data class Spec(
         val key: String,
         val pkg: String? = null,
         val methodName: String? = null,
         /** 为空表示只按方法名/包名匹配，不加字符串条件 */
         val strings: Array<String> = emptyArray(),
+        /** true = 用包含匹配（usingStrings）而不是全等匹配（usingEqStrings） */
+        val contains: Boolean = false,
+        /** 限定声明类的完整类名 */
+        val declaredClass: String? = null,
+        /** 限定参数个数（-1 = 不限） */
+        val paramCount: Int = -1,
+        /** 限定返回类型（JVM 描述符，如 `V` / `Ljava/lang/String;`） */
+        val returnType: String? = null,
+        /** 限定参数类型（JVM 描述符列表） */
+        val paramTypes: Array<String>? = null,
     )
 
     /** 本次解析中各目标的候选数量（诊断用） */
@@ -131,6 +152,8 @@ object DexTargets {
         Spec(K_LOC_LISTENER, methodName = "onLocationChanged", strings = LOC_LISTENER_STRINGS),
         Spec(K_LOC_LISTENER_WGS84, methodName = "onLocationChanged", strings = LOC_LISTENER_WGS84_STRINGS),
         Spec(K_LOC_DEFAULT_MANAGER, methodName = "onLocationChanged", strings = LOC_DEFAULT_MANAGER_STRINGS),
+        // ---- 虚拟定位：选点入口（长按面板「位置」图标）----
+        Spec(K_APP_GRID_GETVIEW, methodName = "getView", strings = APP_GRID_STRINGS, contains = true),
     )
 
     /** 全部目标：缓存判断与「缺哪些」的诊断都以此为准，避免漏掉或重复统计 */
@@ -156,6 +179,12 @@ object DexTargets {
         val cache = context?.let { DexCache.load(it, hostVersion, rescanToken) }
         if (cache != null) {
             cache.forEach { (key, descriptor) ->
+                // 空串 = 上次扫过、确认不存在。放进 result（空列表）而不是留空，
+                // 这样它不会被算进 missing，也就不会触发重新扫描。
+                if (descriptor.isEmpty()) {
+                    result[key] = emptyList()
+                    return@forEach
+                }
                 DexSig.decode(classLoader, descriptor)?.let { result[key] = listOf(it) }
             }
             Logger.i(TAG, "缓存命中 ${result.size}/${cache.size} 项（宿主版本 $hostVersion）")
@@ -202,12 +231,16 @@ object DexTargets {
         Logger.i(TAG, "DexKit 解析耗时 $elapsed ms，命中 ${result.size} 项")
 
         // 3) 写回缓存
-        if (context != null && result.isNotEmpty()) {
+        val stillMissing = ALL_KEYS.filter { it !in result }
+        if (context != null) {
             val entries = LinkedHashMap<String, String>()
             result.forEach { (key, methods) -> methods.firstOrNull()?.let { entries[key] = DexSig.encode(it) } }
+            // 关键：本次「扫过但确实不存在」的目标也要记下来（空值）。
+            // 否则每次冷启动都会把它们算进 missing，从而每次都重新扫一遍 dex ——
+            // 新版微信上缺失的目标越多，启动就越慢。
+            stillMissing.forEach { entries[it] = "" }
             DexCache.save(context, hostVersion, entries, rescanToken)
         }
-        val stillMissing = ALL_KEYS.filter { it !in result }
         if (stillMissing.isNotEmpty()) Logger.w(TAG, "以下目标未定位到：$stillMissing")
         return ResolveResult(result, true, elapsed, stillMissing, LinkedHashMap(candidateCounts))
     }
@@ -325,9 +358,15 @@ object DexTargets {
                 spec.pkg?.let { searchPackages(it) }
                 matcher {
                     spec.methodName?.let { name = it }
+                    spec.declaredClass?.let { declaredClass = it }
+                    if (spec.paramCount >= 0) paramCount = spec.paramCount
+                    spec.returnType?.let { returnType = it }
+                    spec.paramTypes?.let { paramTypes(*it) }
                     // 空数组展开给 usingEqStrings 在部分 DexKit 版本会变成「无条件」，
                     // 这里显式跳过，只按方法名/包名匹配。
-                    if (spec.strings.isNotEmpty()) usingEqStrings(*spec.strings)
+                    if (spec.strings.isNotEmpty()) {
+                        if (spec.contains) usingStrings(*spec.strings) else usingEqStrings(*spec.strings)
+                    }
                 }
             }
         }.onFailure { Logger.e(TAG, "搜索方法 ${spec.key} 失败", it) }.getOrNull() ?: return emptyList()

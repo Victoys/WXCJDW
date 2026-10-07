@@ -44,6 +44,13 @@ object Prefs {
     /** 模块 → 微信：设置页改了开关，宿主应立即重读并热装载 */
     const val ACTION_PREFS_CHANGED = "$MODULE_PACKAGE.PREFS_CHANGED"
 
+    /** 微信 → 模块：在微信地图里选完点，把坐标回传给模块进程落盘 */
+    const val ACTION_LOCATION_PICKED = "$MODULE_PACKAGE.LOCATION_PICKED"
+
+    const val EXTRA_LAT = "lat"
+    const val EXTRA_LNG = "lng"
+    const val EXTRA_ENABLE = "enable"
+
     const val COL_KEY = "key"
     const val COL_TYPE = "type"
     const val COL_VALUE = "value"

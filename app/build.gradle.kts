@@ -11,8 +11,8 @@ android {
         applicationId = "dev.mm.wxcj"
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
-        versionCode = 32
-        versionName = "3.11"
+        versionCode = 33
+        versionName = "3.12"
 
         ndk {
             // 微信与 DexKit 实际只跑在 ARM 上；排除 x86 可显著减小 APK 体积。
