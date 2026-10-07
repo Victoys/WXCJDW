@@ -105,6 +105,69 @@ jobs:
           echo "已安装的平台："
           ls -1 "$SDK_ROOT/platforms" || echo "(platforms 目录为空或不存在)"
 
+      - name: Ensure launcher icon
+        run: |
+          set -euo pipefail
+          RES="app/src/main/res"
+          if [ -s "$RES/mipmap-anydpi-v26/ic_launcher.xml" ] || ls "$RES"/mipmap-*/*.png >/dev/null 2>&1; then
+            echo "启动图标已存在，跳过"
+            exit 0
+          fi
+          echo "::warning::缺少启动图标（二进制 mipmap 常在同步中丢失），正在生成自适应图标"
+          mkdir -p "$RES/mipmap-anydpi-v26" "$RES/drawable"
+
+          cat > "$RES/drawable/ic_launcher_background.xml" <<'XML'
+          <?xml version="1.0" encoding="utf-8"?>
+          <shape xmlns:android="http://schemas.android.com/apk/res/android"
+              android:shape="rectangle">
+              <solid android:color="@color/ic_launcher_background" />
+          </shape>
+          XML
+
+          cat > "$RES/drawable/ic_launcher_foreground.xml" <<'XML'
+          <?xml version="1.0" encoding="utf-8"?>
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="108dp"
+              android:height="108dp"
+              android:viewportWidth="108"
+              android:viewportHeight="108">
+              <path
+                  android:fillColor="#FFFFFF"
+                  android:pathData="M38,32H70A8,8 0 0,1 78,40V64A8,8 0 0,1 70,72H56L46,82V72H38A8,8 0 0,1 30,64V40A8,8 0 0,1 38,32Z" />
+              <path
+                  android:fillColor="#FF07C160"
+                  android:pathData="M41,52a4,4 0 1,0 8,0a4,4 0 1,0 -8,0" />
+              <path
+                  android:fillColor="#FF07C160"
+                  android:pathData="M53,52a4,4 0 1,0 8,0a4,4 0 1,0 -8,0" />
+              <path
+                  android:fillColor="#FF07C160"
+                  android:pathData="M65,52a4,4 0 1,0 8,0a4,4 0 1,0 -8,0" />
+          </vector>
+          XML
+
+          cat > "$RES/mipmap-anydpi-v26/ic_launcher.xml" <<'XML'
+          <?xml version="1.0" encoding="utf-8"?>
+          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+              <background android:drawable="@drawable/ic_launcher_background" />
+              <foreground android:drawable="@drawable/ic_launcher_foreground" />
+          </adaptive-icon>
+          XML
+
+          # 图标底色：没有就追加一个日间默认值（夜间模式缺失时会回落到这里）
+          for f in "$RES/values/colors.xml" "$RES/values-night/colors.xml"; do
+            mkdir -p "$(dirname "$f")"
+            [ -s "$f" ] || printf '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n</resources>\n' > "$f"
+            grep -q 'name="ic_launcher_background"' "$f" && continue
+            if [ "${f#*night}" != "$f" ]; then
+              C="#FF06A050"
+            else
+              C="#FF07C160"
+            fi
+            sed -i "s|</resources>|    <color name=\"ic_launcher_background\">$C</color>\n</resources>|" "$f"
+          done
+          ls -l "$RES/mipmap-anydpi-v26" "$RES/drawable"
+
       - name: Grant execute permission to gradlew
         run: chmod +x ./gradlew
 

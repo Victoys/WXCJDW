@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    自适应图标（Adaptive Icon）。
+
+    为什么用 XML 而不是 PNG：本项目源码会以纯文本快照的形式流转，
+    二进制的 mipmap PNG 带不出来，一同步就丢 —— 上次的
+    「resource mipmap/ic_launcher not found」就是这么来的。
+
+    minSdk = 26，而自适应图标正好从 API 26 开始支持，所以只需要这一份
+    mipmap-anydpi-v26，不必再准备任何密度的位图；圆形/方形/圆角等形状由
+    启动器自行裁剪，roundIcon 也直接复用它。
+-->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@drawable/ic_launcher_background" />
+    <foreground android:drawable="@drawable/ic_launcher_foreground" />
+</adaptive-icon>

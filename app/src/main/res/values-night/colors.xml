@@ -6,4 +6,6 @@
     <color name="mm_text_hint">#80FFFFFF</color>
     <color name="mm_text_off">#80FFFFFF</color>
     <color name="mm_summary_off">#59FFFFFF</color>
+    <!-- 夜间模式图标底色略压暗，避免深色壁纸上过于跳 -->
+    <color name="ic_launcher_background">#FF06A050</color>
 </resources>

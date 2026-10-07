@@ -90,6 +90,26 @@
 
 产物：`MM-v3.11.apk`（release 复用 debug 签名，可直接安装）。
 
+### 报错 `resource mipmap/ic_launcher not found`
+
+Manifest 引用了 `@mipmap/ic_launcher`，但 `app/src/main/res/` 下没有对应的图标。
+同样是「二进制资源在纯文本同步中丢失」造成的。
+
+本项目把图标改成了**纯 XML 的自适应图标**（`minSdk = 26`，而自适应图标正好从 API 26
+起支持，所以一份 `mipmap-anydpi-v26/ic_launcher.xml` 就够，不需要任何密度的 PNG）：
+
+```
+app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml   自适应图标定义
+app/src/main/res/drawable/ic_launcher_background.xml 底色（跟随日/夜间模式）
+app/src/main/res/drawable/ic_launcher_foreground.xml 气泡图形（vector）
+```
+
+CI 里也加了 `Ensure launcher icon` 一步：图标缺失时自动重建这三个文件，不必手动处理。
+
+另外 manifest 里的 `android:extractNativeLibs` 已移除（AGP 8 会警告），
+行为由 `build.gradle.kts` 的 `jniLibs.useLegacyPackaging = true` 保持，
+`libdexkit.so` 依旧是解压安装、可被 `System.loadLibrary` 找到的。
+
 ### 报错 `Could not find or load main class org.gradle.wrapper.GradleWrapperMain`
 
 这是仓库里**缺 `gradle/wrapper/gradle-wrapper.jar`**（只有 `gradlew` 脚本和

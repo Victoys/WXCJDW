@@ -8,4 +8,6 @@
     <color name="mm_text_off">#61000000</color>
     <!-- 开关关闭时：说明文字更淡，进一步弱化 -->
     <color name="mm_summary_off">#42000000</color>
+    <!-- 自适应图标底色（微信绿） -->
+    <color name="ic_launcher_background">#FF07C160</color>
 </resources>
