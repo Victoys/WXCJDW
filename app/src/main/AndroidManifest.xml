@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application
+        android:allowBackup="true"
+        android:extractNativeLibs="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.MM">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!--
+            微信进程用它把模块进程拉起，好让下面的 Provider 可用。
+            exported=true + 静态注册是必须的，否则收不到显式广播。
+        -->
+        <receiver
+            android:name=".WakeReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="dev.mm.wxcj.WAKE" />
+            </intent-filter>
+        </receiver>
+
+        <!--
+            配置跨进程读取：Android 10+ 上 /data/data/<包名> 是 700，
+            微信无法直接读模块的 SharedPreferences 文件，必须走 Binder IPC。
+            exported=true 是必须的，否则微信进程无权访问。
+        -->
+        <provider
+            android:name=".PrefsProvider"
+            android:authorities="dev.mm.wxcj.prefs"
+            android:exported="true"
+            android:grantUriPermissions="true" />
+
+        <!-- Xposed 模块声明：LSPosed / EdXposed 依据这些元数据识别模块 -->
+        <meta-data
+            android:name="xposedmodule"
+            android:value="true" />
+        <meta-data
+            android:name="xposeddescription"
+            android:value="@string/xposed_description" />
+        <meta-data
+            android:name="xposedminversion"
+            android:value="82" />
+        <meta-data
+            android:name="xposedscope"
+            android:value="com.tencent.mm" />
+    </application>
+
+</manifest>

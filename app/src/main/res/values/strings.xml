@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">MM</string>
+    <!-- LSPosed 模块列表里显示的描述，保持中性 -->
+    <string name="xposed_description">MM</string>
+
+    <!-- 功能 -->
+    <string name="feature_anti_recall">消息防撤回</string>
+    <string name="feature_anti_recall_summary">拦截对方发送过来又撤回的消息</string>
+    <string name="feature_disable_typing">禁止上传「正在输入」</string>
+    <string name="feature_disable_typing_summary">阻止微信上传输入状态，对方看不到「对方正在输入...」</string>
+    <string name="feature_disable_pat">禁用拍一拍</string>
+    <string name="feature_disable_pat_summary">双击他人头像时不发送拍一拍</string>
+
+    <string name="feature_fake_location">虚拟定位</string>
+    <string name="feature_fake_location_summary">向微信提供设定坐标（发送位置、附近的人、小程序定位等都会用它）。只作用于微信，不影响其他 App，也不需要「模拟位置」权限</string>
+    <string name="fake_lat_hint">纬度（-90~90）</string>
+    <string name="fake_lng_hint">经度（-180~180）</string>
+    <string name="fake_jitter_hint">随机抖动（米），0 = 关闭</string>
+    <string name="fake_location_hint">坐标要自己填：在地图 App 里长按取点后抄过来，或用下面的常用位置 / 粘贴按钮。改坐标即时生效，不必重启微信</string>
+    <string name="action_paste_coord">粘贴</string>
+    <string name="paste_empty">剪贴板里没有可识别的坐标</string>
+    <string name="paste_done">已填入：%1$s, %2$s</string>
+    <string name="coord_invalid">坐标超出范围，已恢复为上一有效值</string>
+
+    <string-array name="preset_locations">
+        <item>常用位置…</item>
+        <item>北京 39.909230,116.397428</item>
+        <item>上海 31.224361,121.469170</item>
+        <item>广州 23.129110,113.264385</item>
+        <item>深圳 22.543096,114.057865</item>
+        <item>杭州 30.274150,120.155150</item>
+        <item>成都 30.572815,104.066803</item>
+        <item>苏州 31.298886,120.585316</item>
+        <item>香港 22.319303,114.169361</item>
+    </string-array>
+
+    <string name="feature_startup_notice">启动提示</string>
+    <string name="feature_startup_notice_summary">微信启动时提示「已注入」，解析 dex 完成后再提示一次；提示 3 秒后自动消失</string>
+
+    <string name="feature_diagnostic">详细诊断</string>
+    <string name="feature_diagnostic_summary">逐条显示自检结果与每个功能的装载情况，排查时开启</string>
+    <string name="action_rescan">重新解析微信（清缓存）</string>
+    <string name="action_rescan_summary">改过实现或换了微信版本后点一下，下次启动微信会重新扫描</string>
+    <string name="rescan_done">已重扫完成，请完全重启微信</string>
+
+    <string name="action_kill">一键结束微信后台</string>
+    <string name="action_kill_summary">需要 root 权限。等同于「从最近任务划掉」，下次打开是真正的冷启动</string>
+    <string name="kill_running">正在结束微信…</string>
+    <string name="kill_ok">已结束微信后台，重新打开即可生效</string>
+    <string name="kill_fail">执行失败：未获得 root 权限，或系统拦截了 su</string>
+
+    <string name="feature_recall_notice">撤回时显示详情</string>
+    <string name="feature_recall_notice_summary">拦截后弹出浮层，显示是谁撤回了什么内容，必须手动点「知道了」才会消失——锁屏时也会排队，不会错过</string>
+    <string name="recall_notice_template_hint">提示模板：$sender=撤回者，$content=被撤回的内容</string>
+    <string name="feature_recall_confirm">拦截提示常驻</string>
+    <string name="feature_recall_confirm_summary">拦截撤回后的提示不会自动消失，必须手动点「知道了」才关闭；关闭此项则恢复 3 秒自动消失</string>
+    <string name="feature_recall_self">也拦截自己撤回的</string>
+    <string name="feature_recall_self_summary">开启后，自己发出又撤回的消息也会被拦截并提示（默认关闭：自己撤回时让微信正常撤掉）</string>
+
+    <!-- 提示 -->
+    <string name="status_scope">作用范围：com.tencent.mm，仅主进程</string>
+    <string name="settings_entry_hint">入口：桌面「MM」图标；或在 LSPosed 中长按本模块 → 打开应用。</string>
+    <string name="status_hint">修改开关后需完全重启微信才会生效；开启的功能可即时热装载，关闭的仍需重启。可用下方「一键结束微信后台」代替手动划掉。</string>
+    <string name="settings_debug_hint">若功能无效：在 LSPosed 的日志中过滤 Wxcj，查看各项定位是否成功；并确认模块已启用、作用域包含微信，且已强制停止并重开微信。</string>
+    <string name="footer_credit">本工具仅供测试 By Victoys</string>
+</resources>

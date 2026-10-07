@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 系统开启夜间模式时自动生效（小米「夜间模式」/ 澎湃 OS 深色模式即对应此限定符） -->
+    <style name="Theme.MM" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/mm_bg</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:textColorPrimary">@color/mm_text_primary</item>
+        <item name="android:textColorSecondary">@color/mm_text_secondary</item>
+        <item name="android:textColorHint">@color/mm_text_hint</item>
+    </style>
+</resources>

@@ -1,0 +1,18 @@
+[versions]
+agp = "8.7.3"
+kotlin = "2.0.21"
+dexkit = "2.2.0"
+xposedApi = "82"
+
+compileSdk = "35"
+minSdk = "26"
+targetSdk = "35"
+jdk = "17"
+
+[libraries]
+xposed-api = { module = "de.robv.android.xposed:api", version.ref = "xposedApi" }
+dexkit = { module = "org.luckypray:dexkit", version.ref = "dexkit" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }

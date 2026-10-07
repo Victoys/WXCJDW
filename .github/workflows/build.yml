@@ -1,0 +1,100 @@
+name: Build APK
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: gradle
+
+      # 不用 android-actions/setup-android：它会去装一个已被移除的 `tools` 包，
+      # 在自带 cmdline-tools 16.0 的新版 runner 上必然失败（Failed to find package 'tools'）。
+      # ubuntu-latest 本来就预装了 Android SDK，直接定位并补齐需要的组件即可。
+      - name: Set up Android SDK
+        run: |
+          set -euo pipefail
+          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "$SDK_ROOT/platform-tools" >> "$GITHUB_PATH"
+
+          # cmdline-tools 目录名随 runner 镜像版本变化（latest / 16.0 / ...），逐个找
+          SDKMANAGER=""
+          for candidate in "$SDK_ROOT"/cmdline-tools/latest/bin/sdkmanager "$SDK_ROOT"/cmdline-tools/*/bin/sdkmanager; do
+            if [ -x "$candidate" ]; then SDKMANAGER="$candidate"; break; fi
+          done
+          if [ -z "$SDKMANAGER" ]; then
+            echo "::error::未找到 sdkmanager，SDK_ROOT=$SDK_ROOT"
+            ls -R "$SDK_ROOT/cmdline-tools" || true
+            exit 1
+          fi
+          echo "使用 sdkmanager: $SDKMANAGER"
+
+          # 接受许可。注意不能用 `yes | sdkmanager`：sdkmanager 读够输入就关闭管道，
+          # yes 随即被 SIGPIPE 杀掉（退出码 141），在 set -o pipefail 下会让整个 step 失败。
+          # 改成输出有限行数的 y，并允许这一步失败 —— runner 镜像通常已预接受许可。
+          if [ -d "$SDK_ROOT/licenses" ]; then
+            echo "已存在 licenses 目录，跳过 --licenses"
+          else
+            printf 'y\n%.0s' $(seq 1 100) | "$SDKMANAGER" --licenses > /dev/null 2>&1 \
+              || echo "::warning::--licenses 未完全接受，继续安装（多数 runner 已预接受）"
+          fi
+
+          # 已装的组件跳过，避免每次都联网重新解析
+          need=""
+          [ -d "$SDK_ROOT/platforms/android-35" ] || need="$need platforms;android-35"
+          [ -d "$SDK_ROOT/build-tools/35.0.0" ] || need="$need build-tools;35.0.0"
+          [ -d "$SDK_ROOT/platform-tools" ] || need="$need platform-tools"
+          if [ -n "$need" ]; then
+            echo "待安装组件：$need"
+            "$SDKMANAGER" --sdk_root="$SDK_ROOT" --install $need
+          else
+            echo "所需 SDK 组件已全部就位"
+          fi
+          echo "已安装的平台："
+          ls -1 "$SDK_ROOT/platforms" || echo "(platforms 目录为空或不存在)"
+
+      - name: Grant execute permission to gradlew
+        run: chmod +x ./gradlew
+
+      - name: Build Release APK
+        run: ./gradlew :app:assembleRelease --stacktrace
+
+      - name: Rename APK
+        run: |
+          mkdir -p out
+          VERSION=$(sed -n 's/.*versionName = "\(.*\)".*/\1/p' app/build.gradle.kts | head -1)
+          cp app/build/outputs/apk/release/app-release.apk "out/MM-v${VERSION:-1.0}.apk"
+          ls -lh out
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mm-release-apk
+          path: out/*.apk
+          retention-days: 90
+
+      # 打 tag 时顺带发到 Release；不打 tag 就只保留上面的构建产物
+      - name: Publish to Releases
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: out/*.apk
+          generate_release_notes: true

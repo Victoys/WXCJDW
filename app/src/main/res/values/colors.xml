@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="mm_bg">#FFFFFF</color>
+    <color name="mm_text_primary">#DE000000</color>
+    <color name="mm_text_secondary">#8A000000</color>
+    <color name="mm_text_hint">#61000000</color>
+    <!-- 开关关闭时：标题置灰，与开启状态形成对比 -->
+    <color name="mm_text_off">#61000000</color>
+    <!-- 开关关闭时：说明文字更淡，进一步弱化 -->
+    <color name="mm_summary_off">#42000000</color>
+</resources>

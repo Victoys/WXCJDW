@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        日间：继承平台 Material Light。
+        夜间版在 values-night/styles.xml，继承 Material（暗色）。
+        用 -night 资源限定符而不是 Theme.Material.DayNight：后者要求 API 29，
+        而本模块 minSdk 26，直接用会在 26–28 上编译/运行出错。
+    -->
+    <style name="Theme.MM" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/mm_bg</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:textColorPrimary">@color/mm_text_primary</item>
+        <item name="android:textColorSecondary">@color/mm_text_secondary</item>
+        <item name="android:textColorHint">@color/mm_text_hint</item>
+    </style>
+</resources>
