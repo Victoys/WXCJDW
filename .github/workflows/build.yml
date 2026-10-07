@@ -24,6 +24,40 @@ jobs:
           java-version: 17
           cache: gradle
 
+      # `./gradlew` 真正执行的是 gradle/wrapper/gradle-wrapper.jar 里的
+      # org.gradle.wrapper.GradleWrapperMain。仓库里只有 gradlew 脚本和
+      # gradle-wrapper.properties、缺了这个 jar，就会直接报
+      #   Could not find or load main class org.gradle.wrapper.GradleWrapperMain
+      # （jar 是二进制文件，纯文本的源码快照带不出来，所以在这里兜底补齐。）
+      - name: Ensure Gradle wrapper jar
+        run: |
+          set -euo pipefail
+          if [ -s gradle/wrapper/gradle-wrapper.jar ]; then
+            echo "gradle-wrapper.jar 已存在（$(stat -c%s gradle/wrapper/gradle-wrapper.jar) 字节），跳过"
+            exit 0
+          fi
+          echo "::warning::缺少 gradle/wrapper/gradle-wrapper.jar，正在自动补齐"
+          VER=$(sed -n 's|.*distributions/gradle-\([0-9.]*\)-.*\.zip|\1|p' \
+                gradle/wrapper/gradle-wrapper.properties | head -1)
+          VER="${VER:-8.9}"
+          echo "Gradle 版本：$VER"
+          DIST="/tmp/gradle-${VER}-bin.zip"
+          curl -fsSL -o "$DIST" "https://services.gradle.org/distributions/gradle-${VER}-bin.zip" \
+            || curl -fsSL -o "$DIST" "https://mirrors.cloud.tencent.com/gradle/gradle-${VER}-bin.zip"
+          rm -rf /tmp/gradle-dist && mkdir -p /tmp/gradle-dist
+          unzip -q "$DIST" -d /tmp/gradle-dist
+          # 官方的 wrapper jar 就打包在分发包的 gradle-wrapper-main-<ver>.jar 里面
+          TMPD="$(mktemp -d)"
+          unzip -q -o "/tmp/gradle-dist/gradle-${VER}/lib/plugins/gradle-wrapper-main-${VER}.jar" -d "$TMPD"
+          if [ -s "$TMPD/gradle-wrapper.jar" ]; then
+            mkdir -p gradle/wrapper
+            cp "$TMPD/gradle-wrapper.jar" gradle/wrapper/gradle-wrapper.jar
+          else
+            # 兜底：直接用分发包里的 gradle 生成整套 wrapper（JDK 已在上一步装好）
+            "/tmp/gradle-dist/gradle-${VER}/bin/gradle" wrapper --gradle-version "$VER" --distribution-type bin
+          fi
+          ls -l gradle/wrapper/
+
       # 不用 android-actions/setup-android：它会去装一个已被移除的 `tools` 包，
       # 在自带 cmdline-tools 16.0 的新版 runner 上必然失败（Failed to find package 'tools'）。
       # ubuntu-latest 本来就预装了 Android SDK，直接定位并补齐需要的组件即可。

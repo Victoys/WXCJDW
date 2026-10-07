@@ -90,6 +90,19 @@
 
 产物：`MM-v3.11.apk`（release 复用 debug 签名，可直接安装）。
 
+### 报错 `Could not find or load main class org.gradle.wrapper.GradleWrapperMain`
+
+这是仓库里**缺 `gradle/wrapper/gradle-wrapper.jar`**（只有 `gradlew` 脚本和
+`gradle-wrapper.properties`）。`gradlew` 实际跑的就是这个 jar 里的主类，
+jar 不在就直接崩，跟代码无关。
+
+jar 是二进制文件，纯文本的源码快照带不出来，所以两种补法：
+
+- **CI 自动补齐（已内置）**：workflow 里加了 `Ensure Gradle wrapper jar` 一步，
+  检测到 jar 缺失就从 Gradle 官方分发包里取出同版本的 jar 放回去，无需手动干预。
+- **本地补**：在项目根目录跑一次 `gradle wrapper --gradle-version 8.9`
+  （或直接从分发包里取），然后把生成的 `gradle/wrapper/gradle-wrapper.jar` 提交上去。
+
 ## 使用
 
 1. 装好 LSPosed / EdXposed 与本 APK。
