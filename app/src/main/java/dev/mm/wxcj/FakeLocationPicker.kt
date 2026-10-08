@@ -205,9 +205,12 @@ object FakeLocationPicker {
         pickedCount++
         lastError = null
 
-        // 1) 内存里立刻生效：hook 读的就是这两个字段，改完下一次取坐标就是新值
+        // 1) 内存里立刻生效：hook 读的就是这几个字段，改完下一次取坐标就是新值。
+        //    coordsReady 必须一起置 true，否则 shouldReplace() 会判定「坐标未设置」
+        //    而继续走真实定位 —— 选完点却不生效就是这么来的。
         FakeLocation.latitude = lat
         FakeLocation.longitude = lng
+        FakeLocation.coordsReady = true
         FakeLocation.enabled = true
 
         // 2) 通知模块进程写进 SharedPreferences —— 这样设置页打开看到的就是新坐标，

@@ -46,9 +46,24 @@ object FakeLocation {
     const val DEFAULT_LAT = 31.224361
     const val DEFAULT_LNG = 121.469170
 
-    /** 总开关：只有开关打开时才替换坐标 */
+    /**
+     * 总开关：只有开关打开时才替换坐标。
+     *
+     * **默认必须是 false**：配置读取失败（模块进程没起来 / Provider 不通）时，
+     * 兜底行为应该是「不伪造」，而不是「照着默认坐标伪造」。
+     * 方向反了的话，用户会觉得「开关关了还在假定位」。
+     */
     @Volatile
-    var enabled = true
+    var enabled = false
+
+    /**
+     * 坐标是否可用。
+     *
+     * 开关开着但坐标没填（或填的是非法值）时也必须走真实定位 ——
+     * 「没坐标」和「关开关」是两个独立的关闭条件，缺哪个都不替换。
+     */
+    @Volatile
+    var coordsReady = false
 
     @Volatile
     var latitude = DEFAULT_LAT
@@ -168,7 +183,7 @@ object FakeLocation {
         return runCatching {
             XposedBridge.hookMethod(method, object : XC_MethodHook() {
                 override fun beforeHookedMethod(param: MethodHookParam) {
-                    if (!enabled) return
+                    if (!shouldReplace()) return
                     param.result = if (isDouble) value() else value().toFloat()
                     replacedCount++
                 }
@@ -192,7 +207,7 @@ object FakeLocation {
                 String::class.java,
                 object : XC_MethodHook() {
                     override fun beforeHookedMethod(param: MethodHookParam) {
-                        if (!enabled) return
+                        if (!shouldReplace()) return
                         val provider = param.args?.getOrNull(0) as? String ?: return
                         val (lat, lng) = jittered()
                         val loc = Location(provider)
@@ -211,6 +226,14 @@ object FakeLocation {
         }.onFailure { Logger.w(TAG, "系统定位兜底未挂载：${it.message}") }.getOrDefault(false)
     }
 
+    /**
+     * 是否该替换坐标：**开关打开 且 坐标有效**，两个条件缺一不可。
+     *
+     * 之所以把「坐标有效」也做成硬条件，是因为用户最容易遇到的困惑就是
+     * 「开关关了怎么还是假定位」。让它俩独立生效，任何一条不成立都走真实定位。
+     */
+    private fun shouldReplace(): Boolean = enabled && coordsReady
+
     /** 加上随机抖动后的坐标。抖动关闭时就是设定值本身。 */
     private fun jittered(): Pair<Double, Double> {
         val radius = jitterMeters
@@ -228,7 +251,12 @@ object FakeLocation {
         val lat = String.format(Locale.US, "%.5f", latitude)
         val lng = String.format(Locale.US, "%.5f", longitude)
         val jitter = if (jitterMeters > 0) "（抖动 ±${jitterMeters}米）" else ""
-        return "虚拟定位：回调 $callbackCount 次，替换 $replacedCount 次，" +
+        val state = when {
+            !enabled -> "开关关闭（不替换）"
+            !coordsReady -> "坐标未设置（不替换）"
+            else -> "生效中"
+        }
+        return "虚拟定位：$state，回调 $callbackCount 次，替换 $replacedCount 次，" +
             "系统兜底 $systemFallbackCount 次，接管类=$classes，坐标=$lat,$lng$jitter"
     }
 }

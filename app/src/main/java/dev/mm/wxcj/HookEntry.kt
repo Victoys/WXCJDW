@@ -305,8 +305,13 @@ class HookEntry : IXposedHookLoadPackage {
                 if (typing) Notifier.notify(
                     "禁止输入状态：doScene 拦截 ${DisableTypingStatus.blockedCount} 次"
                 )
-                if (fake) Notifier.notify(FakeLocation.report())
-                if (fake) Notifier.notify(WeChatLocationEntry.report() + "｜" + FakeLocationPicker.report())
+                // 开关关着时也要报这一行：用户最常问的就是
+                // 「开关关了为什么还是假定位」，这一行能直接证明有没有在替换。
+                if (fake || verbose) Notifier.notify(FakeLocation.report())
+                if (fake || verbose) {
+                    Notifier.notify(WeChatMainPlusEntry.report())
+                    Notifier.notify(WeChatLocationEntry.report() + "｜" + FakeLocationPicker.report())
+                }
                 Notifier.notify(Probe.report() + "｜ClassLoader相同=$sameLoader")
                 Notifier.notify(Notifier.flushDiagnostics())
             }, "Wxcj-selftest").start()
@@ -339,18 +344,32 @@ class HookEntry : IXposedHookLoadPackage {
         FakeLocation.verbose = diag
         // 坐标与开关都在 hook 内部读取，因此**关闭也能即时生效** ——
         // 这是虚拟定位与其他功能的区别：其他功能靠「装不装 hook」，关掉就得重启。
-        FakeLocation.enabled =
-            prefs.getBoolean(Prefs.KEY_FAKE_LOCATION, Prefs.DEFAULT_FAKE_LOCATION)
-        FakeLocation.latitude =
-            prefs.getString(Prefs.KEY_FAKE_LAT, Prefs.DEFAULT_FAKE_LAT).toDoubleOrNull()
-                ?: Prefs.DEFAULT_FAKE_LAT.toDouble()
-        FakeLocation.longitude =
-            prefs.getString(Prefs.KEY_FAKE_LNG, Prefs.DEFAULT_FAKE_LNG).toDoubleOrNull()
-                ?: Prefs.DEFAULT_FAKE_LNG.toDouble()
+        //
+        // 安全兜底：配置来自「宿主侧镜像」或「默认值」时，一律按关闭处理。
+        // 镜像是上次成功读取时存的旧快照：冷启动时模块进程还没起来，Provider
+        // 会暂时读不到，这时若拿旧镜像里的 fake=true 去装 hook，就会出现
+        // 「开关明明关了，冷启动却还在假定位」。宁可少生效一次，也不能误伪造。
+        val trusted = prefs.source == Prefs.SOURCE_PROVIDER || prefs.source == Prefs.SOURCE_XSHARED
+        val switchOn = prefs.getBoolean(Prefs.KEY_FAKE_LOCATION, Prefs.DEFAULT_FAKE_LOCATION)
+        FakeLocation.enabled = switchOn && trusted
+
+        // 坐标：任一为空/非法就标记「不可用」，此时即便开关开着也走真实定位
+        val lat = prefs.getString(Prefs.KEY_FAKE_LAT, Prefs.DEFAULT_FAKE_LAT).trim().toDoubleOrNull()
+        val lng = prefs.getString(Prefs.KEY_FAKE_LNG, Prefs.DEFAULT_FAKE_LNG).trim().toDoubleOrNull()
+        FakeLocation.coordsReady = lat != null && lng != null
+        if (lat != null) FakeLocation.latitude = lat
+        if (lng != null) FakeLocation.longitude = lng
         FakeLocation.jitterMeters = prefs.getInt(Prefs.KEY_FAKE_JITTER, Prefs.DEFAULT_FAKE_JITTER)
+
+        if (!trusted) {
+            Logger.w(TAG, "虚拟定位：配置来源不可信（${prefs.source}），本次按关闭处理")
+        } else if (switchOn && !FakeLocation.coordsReady) {
+            Logger.w(TAG, "虚拟定位：开关开着但坐标为空/非法，本次不替换坐标")
+        }
         Logger.i(
             TAG,
-            "虚拟定位坐标=${FakeLocation.latitude},${FakeLocation.longitude}，" +
+            "虚拟定位开关=${if (FakeLocation.enabled) "开" else "关"}，" +
+                "坐标=${if (FakeLocation.coordsReady) "${FakeLocation.latitude},${FakeLocation.longitude}" else "未设置"}，" +
                 "抖动=${FakeLocation.jitterMeters}米"
         )
         return diag
@@ -408,8 +427,11 @@ class HookEntry : IXposedHookLoadPackage {
 
         // 选点入口：有了它就不用手填坐标 —— 长按聊天面板的「位置」图标，
         // 直接拉起微信自己的腾讯地图选点页。
-        // 入口装不上只是「没法点选」，坐标替换本身照常工作，所以不进 badLabels。
-        if (fake) installLocationEntries(targets, okLabels)
+        //
+        // **必须无条件装载**：选完点是会自动打开开关的，如果入口只在开关打开时
+        // 才装，就成了「没坐标 → 开关关 → 入口不装 → 更没坐标」的死循环。
+        // 入口只负责「拉起选点页」，本身不伪造任何东西，开着也不影响真实定位。
+        installLocationEntries(targets, okLabels)
     }
 
     /**
@@ -430,15 +452,22 @@ class HookEntry : IXposedHookLoadPackage {
             return
         }
 
-        val panel = targets[DexTargets.K_APP_GRID_GETVIEW].orEmpty()
-        val count = WeChatLocationEntry.install(panel, cl)
+        // 入口一（主）：长按微信主界面右上角的「+」—— 不用先找个对话
+        val plusOk = WeChatMainPlusEntry.install(
+            listOfNotNull(cl, hostClassLoader).distinct(),
+        )
+        if (plusOk) okLabels += "选点(长按主界面+)"
 
-        if (count > 0) {
-            okLabels += "选点(长按位置)"
-            return
-        }
+        // 入口二（备）：长按聊天面板的「位置」图标。
+        // 两个都在也互不冲突（位置不同），留着当「+」认不出来时的退路。
+        val panel = targets[DexTargets.K_APP_GRID_GETVIEW].orEmpty()
+        val panelOk = WeChatLocationEntry.install(panel, cl)
+        if (panelOk > 0) okLabels += "选点(长按位置)"
+
+        if (plusOk || panelOk > 0) return
+
         loadedKeys.remove("locEntries")   // 允许以后重试（比如重扫后定位到了）
-        Logger.w(TAG, "选点入口未装载，只能在设置页手填坐标")
+        Logger.w(TAG, "选点入口都未装载，只能在设置页手填坐标")
     }
 
     private fun installFakeLocationFallback(enabled: Boolean, classLoader: ClassLoader) {

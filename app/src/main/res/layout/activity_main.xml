@@ -288,36 +288,46 @@
                 android:layout_marginStart="12dp" />
         </LinearLayout>
 
+        <!--
+            坐标不再手工填写：只能在微信里长按「位置」图标用地图选点。
+            这里只做只读展示 + 一个「清除」按钮，让用户知道当前生效的是哪个点。
+        -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
             android:orientation="horizontal">
 
-            <EditText
-                android:id="@+id/editFakeLat"
+            <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:hint="@string/fake_lat_hint"
-                android:inputType="numberSigned|numberDecimal"
-                android:singleLine="true"
-                android:textColor="@color/mm_text_primary"
-                android:textColorHint="@color/mm_text_hint"
-                android:textSize="14sp" />
+                android:orientation="vertical">
 
-            <EditText
-                android:id="@+id/editFakeLng"
-                android:layout_width="0dp"
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/fake_coord_label"
+                    android:textSize="12sp"
+                    android:textColor="@color/mm_text_secondary" />
+
+                <TextView
+                    android:id="@+id/txtFakeCoord"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:text="@string/fake_coord_none"
+                    android:textSize="14sp"
+                    android:textColor="@color/mm_text_primary" />
+            </LinearLayout>
+
+            <Button
+                android:id="@+id/btnClearCoord"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:layout_gravity="center_vertical"
                 android:layout_marginStart="10dp"
-                android:layout_weight="1"
-                android:hint="@string/fake_lng_hint"
-                android:inputType="numberSigned|numberDecimal"
-                android:singleLine="true"
-                android:textColor="@color/mm_text_primary"
-                android:textColorHint="@color/mm_text_hint"
-                android:textSize="14sp" />
+                android:text="@string/fake_clear" />
         </LinearLayout>
 
         <EditText
@@ -331,26 +341,6 @@
             android:textColor="@color/mm_text_primary"
             android:textColorHint="@color/mm_text_hint"
             android:textSize="14sp" />
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:orientation="horizontal">
-
-            <Spinner
-                android:id="@+id/spinnerPreset"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1" />
-
-            <Button
-                android:id="@+id/btnPasteCoord"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="10dp"
-                android:text="@string/action_paste_coord" />
-        </LinearLayout>
 
         <TextView
             android:layout_width="match_parent"

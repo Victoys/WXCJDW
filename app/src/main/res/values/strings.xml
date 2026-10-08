@@ -14,26 +14,12 @@
 
     <string name="feature_fake_location">虚拟定位</string>
     <string name="feature_fake_location_summary">向微信提供设定坐标（发送位置、附近的人、小程序定位等都会用它）。只作用于微信，不影响其他 App，也不需要「模拟位置」权限</string>
-    <string name="fake_lat_hint">纬度（-90~90）</string>
-    <string name="fake_lng_hint">经度（-180~180）</string>
-    <string name="fake_jitter_hint">随机抖动（米），0 = 关闭</string>
-    <string name="fake_location_hint">最省事的做法：在微信任一聊天里点「+」打开面板，长按「位置」图标，用微信自己的地图选点（旧版微信也可在设置页「虚拟定位」那一行进入）。也可以手工填坐标，或用下面的常用位置 / 粘贴按钮。改坐标即时生效，不必重启微信</string>
-    <string name="action_paste_coord">粘贴</string>
-    <string name="paste_empty">剪贴板里没有可识别的坐标</string>
-    <string name="paste_done">已填入：%1$s, %2$s</string>
-    <string name="coord_invalid">坐标超出范围，已恢复为上一有效值</string>
-
-    <string-array name="preset_locations">
-        <item>常用位置…</item>
-        <item>北京 39.909230,116.397428</item>
-        <item>上海 31.224361,121.469170</item>
-        <item>广州 23.129110,113.264385</item>
-        <item>深圳 22.543096,114.057865</item>
-        <item>杭州 30.274150,120.155150</item>
-        <item>成都 30.572815,104.066803</item>
-        <item>苏州 31.298886,120.585316</item>
-        <item>香港 22.319303,114.169361</item>
-    </string-array>
+    <string name="fake_coord_label">当前坐标</string>
+    <string name="fake_coord_none">未设置 —— 去微信里长按「位置」图标选一个点</string>
+    <string name="fake_jitter_hint">随机抖动半径（米，0 = 关闭）</string>
+    <string name="fake_location_hint">坐标只能在这里选：微信任一聊天 → 点「+」打开面板 → 长按「位置」图标 → 用微信自己的地图选点，选完即生效。开关开着但没选过点时不替换任何东西，微信照常用真实定位</string>
+    <string name="fake_clear">清除坐标</string>
+    <string name="fake_cleared">已清除坐标，虚拟定位不再生效</string>
 
     <string name="feature_startup_notice">启动提示</string>
     <string name="feature_startup_notice_summary">微信启动时提示「已注入」，解析 dex 完成后再提示一次；提示 3 秒后自动消失</string>
@@ -45,10 +31,10 @@
     <string name="rescan_done">已重扫完成，请完全重启微信</string>
 
     <string name="action_kill">一键结束微信后台</string>
-    <string name="action_kill_summary">需要 root 权限。等同于「从最近任务划掉」，下次打开是真正的冷启动</string>
+    <string name="action_kill_summary">先试系统自带的结束后台进程（无需 root）；微信在前台时再用 root 的 am force-stop。自动适配 KernelSU / APatch / Magisk。等同于「从最近任务划掉」，下次打开是真正的冷启动</string>
     <string name="kill_running">正在结束微信…</string>
     <string name="kill_ok">已结束微信后台，重新打开即可生效</string>
-    <string name="kill_fail">执行失败：未获得 root 权限，或系统拦截了 su</string>
+    <string name="kill_fail">未能完全停止：微信可能还在前台。请确认 root 方案已授予本应用权限，或手动从最近任务划掉</string>
 
     <string name="feature_recall_notice">撤回时显示详情</string>
     <string name="feature_recall_notice_summary">拦截后弹出浮层，显示是谁撤回了什么内容，必须手动点「知道了」才会消失——锁屏时也会排队，不会错过</string>

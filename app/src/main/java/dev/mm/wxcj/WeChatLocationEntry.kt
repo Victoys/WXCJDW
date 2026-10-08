@@ -1,10 +1,7 @@
 package dev.mm.wxcj
 
-import android.graphics.drawable.Drawable
 import android.view.View
-import android.view.ViewGroup
 import android.widget.AdapterView
-import android.widget.ImageView
 import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers
@@ -53,6 +50,11 @@ object WeChatLocationEntry {
 
     @Volatile
     var pickLaunched = 0
+        private set
+
+    /** 长按了位置格子但开关关着、已放行的次数（诊断用） */
+    @Volatile
+    var longClickSkipped = 0
         private set
 
     @Volatile
@@ -108,42 +110,13 @@ object WeChatLocationEntry {
     }
 
     /**
-     * 认出「位置」格子。
+     * 认出「位置」格子：看它（含子 View）里有没有 `panel_icon_location` 这个图标。
      *
-     * 做法是遍历格子（含子 View）里所有可见 ImageView 的 drawable，
-     * 取 drawable 上所有 int 字段，用 `getResourceEntryName` 反查资源名。
-     * 微信的图标 drawable 内部会持有资源 id 字段，这一步实测可靠。
+     * 反查资源名的活儿交给 [IconNames.ofTree]（与「长按主界面+」那个入口共用）。
      */
     private fun isLocationItem(item: View): Boolean {
-        val icons = ArrayList<Drawable>()
-        fun collect(view: View) {
-            if (view.visibility != View.VISIBLE) return
-            if (view is ImageView) view.drawable?.let { icons += it }
-            if (view is ViewGroup) {
-                for (i in 0 until view.childCount) collect(view.getChildAt(i))
-            }
-        }
-        collect(item)
-        if (icons.isEmpty()) return false
-
-        val resources = item.resources ?: return false
-        for (drawable in icons) {
-            var cls: Class<*>? = drawable.javaClass
-            while (cls != null) {
-                for (field in cls.declaredFields) {
-                    if (field.type != Int::class.javaPrimitiveType) continue
-                    val value = runCatching {
-                        field.isAccessible = true
-                        field.get(drawable) as? Int
-                    }.getOrNull() ?: continue
-                    if (value == 0) continue
-                    val name = runCatching { resources.getResourceEntryName(value) }.getOrNull()
-                    if (name == ICON_NAME) return true
-                }
-                cls = cls.superclass
-            }
-        }
-        return false
+        val names = IconNames.ofTree(item)
+        return names.any { it.equals(ICON_NAME, ignoreCase = true) }
     }
 
     private fun hookLongClick(listener: AdapterView.OnItemLongClickListener, classLoader: ClassLoader) {
@@ -168,11 +141,26 @@ object WeChatLocationEntry {
             XposedBridge.hookMethod(method, object : XC_MethodHook() {
                 override fun beforeHookedMethod(param: MethodHookParam) {
                     runCatching {
-                        longClickSeen++
                         val view = param.args.getOrNull(1) as? View ?: return
                         val isLocation = synchronized(locationViews) { view in locationViews }
                         // 长按的不是位置格子：照常走微信自己的长按行为
                         if (!isLocation) return
+                        longClickSeen++   // 只统计「长按了位置格子」
+
+                        //
+                        // 虚拟定位开关关着时**不拉起选点页**，直接走微信原本的长按行为。
+                        // 这是刻意的防误触：开关一关，长按「位置」就变回普通操作。
+                        //
+                        // 注意要在**运行时**判断，不能只看装载时机：Xposed 的 hook
+                        // 装上后无法安全卸载，若只靠「装载时开关是否打开」，
+                        // 用户在设置页关掉开关后长按仍会弹出选点页。
+                        // 所以入口照常无条件装载（保证开关从关→开能立刻生效），
+                        // 由这里的实时判断来决定是否响应。
+                        //
+                        if (!FakeLocation.enabled) {
+                            longClickSkipped++
+                            return
+                        }
 
                         val grid = param.args.getOrNull(0) as? AdapterView<*>
                         val context = grid?.context ?: view.context
@@ -194,7 +182,8 @@ object WeChatLocationEntry {
     fun report(): String = buildString {
         append("选点入口：")
         append(if (panelHooked) "已挂载 ✓" else "未挂载 ✗")
-        append("，长按 $longClickSeen 次，拉起 $pickLaunched 次")
+        append(if (FakeLocation.enabled) "，开关已开" else "，开关已关（长按不响应）")
+        append("，长按位置 $longClickSeen 次（忽略 $longClickSkipped 次），拉起 $pickLaunched 次")
         lastError?.let { append("（$it）") }
     }
 }
