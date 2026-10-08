@@ -456,6 +456,37 @@
             android:textSize="12sp"
             android:visibility="gone" />
 
+        <!--
+            root 入口：先看「检测」拿到本机实际可用的那条，再用下面的下拉
+            把它固定住，之后就不再逐个探测，省掉每次点按钮的探测开销。
+        -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/btnDetectRoot"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/root_detect" />
+
+            <Spinner
+                android:id="@+id/spinnerRootEntry"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="10dp"
+                android:layout_weight="1" />
+        </LinearLayout>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="@string/root_entry_hint"
+            android:textSize="12sp" />
+
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"

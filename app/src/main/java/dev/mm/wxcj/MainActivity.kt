@@ -1,6 +1,7 @@
 package dev.mm.wxcj
 
 import android.app.Activity
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.text.Editable
@@ -8,8 +9,11 @@ import android.text.TextWatcher
 import android.view.View
 import android.view.ViewGroup
 import android.app.ActivityManager
+import android.widget.AdapterView
+import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.EditText
+import android.widget.Spinner
 import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
@@ -50,6 +54,7 @@ class MainActivity : Activity() {
         bindSwitch(R.id.switchDiagnostic, Prefs.KEY_DIAGNOSTIC, Prefs.DEFAULT_DIAGNOSTIC)
         bindRescanButton()
         bindKillButton()
+        bindRootEntry()
     }
 
     /** 从微信里选完点再切回设置页时，这里要能看到新坐标。 */
@@ -107,6 +112,83 @@ class MainActivity : Activity() {
                 }
             }.start()
         }
+    }
+
+    /**
+     * root 入口：检测按钮 + 手动固定下拉。
+     *
+     * 为什么要能手动固定：自动探测每换一次（授权撤销、换 root 方案）就要把候选
+     * 挨个试一遍，每次都要 fork 一个进程等超时。固定之后直接命中，零探测开销。
+     * 检测按钮只跑一次探测，把结果摆出来给用户看，不执行任何命令。
+     */
+    private fun bindRootEntry() {
+        val result = findViewById<TextView>(R.id.txtKillResult)
+        val names = ArrayList<String>().apply {
+            add(getString(R.string.root_entry_auto))
+            addAll(SU_INVOKERS.map { it.name })
+        }
+        val values = ArrayList<String>().apply {
+            add("")                                  // 自动
+            addAll(SU_INVOKERS.map { it.name })
+        }
+
+        val spinner = findViewById<Spinner>(R.id.spinnerRootEntry)
+        spinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, names)
+            .also { it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
+
+        val prefs = Prefs.local(this)
+        val saved = prefs.getString(KEY_SU_LOCK, "").orEmpty()
+        val savedIndex = values.indexOf(saved)
+        spinner.setSelection(if (savedIndex >= 0) savedIndex else 0)
+
+        spinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                val value = values.getOrNull(position) ?: return
+                prefs.edit().putString(KEY_SU_LOCK, value).commit()
+                if (value.isEmpty()) {
+                    // 切回自动：清掉缓存的探测结果，下次重新探测
+                    prefs.edit().remove(KEY_SU_INVOKER).apply()
+                    result.text = getString(R.string.root_entry_auto)
+                } else {
+                    result.text = getString(R.string.root_entry_locked, value)
+                }
+                result.visibility = View.VISIBLE
+            }
+
+            override fun onNothingSelected(parent: AdapterView<*>?) = Unit
+        }
+
+        // 检测：只做探测，不执行任何 root 命令
+        findViewById<Button>(R.id.btnDetectRoot).setOnClickListener {
+            btnDetectEnabled(false, it as Button)
+            Thread {
+                val info = ArrayList<String>()
+                val invoker = resolveInvoker(info, forceProbe = true)
+                val env = detectRootEnv()
+                val uidOk = if (invoker != null) {
+                    val (code, out) = runCommand(invoker.buildCmd("id -u"), SU_PROBE_TIMEOUT_MS)
+                    if (code == 0) out.lineSequence().firstOrNull { it.isNotBlank() }?.trim().orEmpty() else "失败(code=$code)"
+                } else {
+                    "不可用"
+                }
+                runOnUiThread {
+                    btnDetectEnabled(true, findViewById(R.id.btnDetectRoot))
+                    val text = buildString {
+                        append(getString(R.string.root_detect_result, invoker?.name ?: "未找到", uidOk))
+                        append("\nroot 方案：").append(env ?: "未识别")
+                        if (info.isNotEmpty()) append("\n").append(info.joinToString("\n"))
+                    }
+                    result.text = text
+                    result.visibility = View.VISIBLE
+                    Logger.i("MainActivity", "root 检测：$text")
+                }
+            }.start()
+        }
+    }
+
+    private fun btnDetectEnabled(enabled: Boolean, btn: Button) {
+        btn.isEnabled = enabled
+        btn.text = if (enabled) getString(R.string.root_detect) else getString(R.string.kill_running)
     }
 
     /**
@@ -205,16 +287,19 @@ class MainActivity : Activity() {
     }
 
     /** 单次 su 调用的超时（毫秒）。KernelSU 首次授权弹窗若没人点，不能一直等。 */
-    private const val SU_TIMEOUT_MS = 6_000L
+    private val SU_TIMEOUT_MS = 6_000L
 
     /** 探测 su 时的超时：短一点，避免首次要试多个路径时等太久。 */
-    private const val SU_PROBE_TIMEOUT_MS = 4_000L
+    private val SU_PROBE_TIMEOUT_MS = 3_000L
 
     /** 超时返回码（区别于命令自己返回的非 0 值） */
-    private const val TIMEOUT_CODE = -999
+    private val TIMEOUT_CODE = -999
 
     /** 缓存已探测到的 su 路径，避免每次点按钮都全试一轮。 */
-    private const val KEY_SU_INVOKER = "su_invoker"
+    private val KEY_SU_INVOKER = "su_invoker"
+
+    /** 手动固定的 root 入口名；空 = 自动（用探测并缓存的结果） */
+    private val KEY_SU_LOCK = "su_lock"
 
     /**
      * 一种「拿到 root shell 并执行命令」的方式。
@@ -361,8 +446,21 @@ class MainActivity : Activity() {
      *
      * 命中后缓存名字；下次失效（换 root 方案 / 授权被撤销）自动重新探测。
      */
-    private fun resolveInvoker(details: MutableList<String>): SuInvoker? {
+    private fun resolveInvoker(details: MutableList<String>, forceProbe: Boolean = false): SuInvoker? {
         val prefs = Prefs.local(this)
+
+        // ---- 手动固定优先：跳过全部探测，零开销 ----
+        // forceProbe=true 时忽略固定（「检测」按钮用，要真实探一遍给用户看）
+        val locked = if (forceProbe) "" else prefs.getString(KEY_SU_LOCK, null).orEmpty()
+        if (locked.isNotEmpty()) {
+            val invoker = SU_INVOKERS.firstOrNull { it.name == locked }
+            if (invoker != null) {
+                details += "root 入口（已固定，跳过探测）：${invoker.name}"
+                Logger.i("MainActivity", "root 入口：已固定 ${invoker.name}")
+                return invoker
+            }
+        }
+
         val cachedName = prefs.getString(KEY_SU_INVOKER, null)
         if (cachedName != null) {
             val cached = SU_INVOKERS.firstOrNull { it.name == cachedName }
@@ -377,6 +475,7 @@ class MainActivity : Activity() {
             tried++
             if (isRootShell(invoker)) {
                 prefs.edit().putString(KEY_SU_INVOKER, invoker.name).apply()
+                Logger.i("MainActivity", "root 入口：探测命中 ${invoker.name}（root 方案=${detectRootEnv() ?: "未知"}）")
                 return invoker
             }
         }

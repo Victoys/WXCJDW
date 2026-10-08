@@ -47,6 +47,11 @@
     <!-- 提示 -->
     <string name="status_scope">作用范围：com.tencent.mm，仅主进程</string>
     <string name="settings_entry_hint">入口：桌面「MM」图标；或在 LSPosed 中长按本模块 → 打开应用。</string>
+    <string name="root_detect">检测 root 入口</string>
+    <string name="root_entry_auto">自动（用探测结果）</string>
+    <string name="root_entry_hint">先点「检测」看本机实际可用哪条，再在下拉里把它固定住，之后就不再逐个探测。KernelSU 通常是 /system/bin/su（sucompat 重定向）或 ksud 扮演 su</string>
+    <string name="root_entry_locked">已固定为：%1$s</string>
+    <string name="root_detect_result">root 入口：%1$s｜uid 检查：%2$s</string>
     <string name="status_hint">修改开关后需完全重启微信才会生效；开启的功能可即时热装载，关闭的仍需重启。可用下方「一键结束微信后台」代替手动划掉。</string>
     <string name="settings_debug_hint">若功能无效：在 LSPosed 的日志中过滤 Wxcj，查看各项定位是否成功；并确认模块已启用、作用域包含微信，且已强制停止并重开微信。</string>
     <string name="footer_credit">本工具仅供测试 By Victoys</string>

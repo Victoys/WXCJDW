@@ -307,8 +307,8 @@ class HookEntry : IXposedHookLoadPackage {
                 )
                 // 开关关着时也要报这一行：用户最常问的就是
                 // 「开关关了为什么还是假定位」，这一行能直接证明有没有在替换。
-                if (fake || verbose) Notifier.notify(FakeLocation.report())
-                if (fake || verbose) {
+                if (fake || diag) Notifier.notify(FakeLocation.report())
+                if (fake || diag) {
                     Notifier.notify(WeChatMainPlusEntry.report())
                     Notifier.notify(WeChatLocationEntry.report() + "｜" + FakeLocationPicker.report())
                 }

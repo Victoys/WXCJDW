@@ -1,6 +1,6 @@
 # MM
 
-包名 `dev.mm.wxcj`，桌面显示名 `MM`，版本 v3.17。
+包名 `dev.mm.wxcj`，桌面显示名 `MM`，版本 v3.18。
 
 **轻量模块**：只做 4 个「hook 一个返回值」的功能，不涉及任何 UI / 菜单注入，
 目标是尽可能不给微信启动添负担。重功能（伪装余额、修改文本消息、视频号下载）
@@ -24,7 +24,7 @@
 （长按菜单、分享菜单、微信内置地图选点）跨版本风险明显更高。分开之后：
 只想要防撤回的人，不必承担菜单注入带来的启动开销与兼容风险。
 
-## 虚拟定位（v3.11 新增，v3.12 加入微信地图选点，v3.13 修掉开关不生效，v3.14 改为纯开关，v3.15 长按跟随开关，v3.16 修正 KernelSU su 入口，v3.17 加入 ksud 兜底）
+## 虚拟定位（v3.11 新增，v3.12 加入微信地图选点，v3.13 修掉开关不生效，v3.14 改为纯开关，v3.15 长按跟随开关，v3.16 修正 KernelSU su 入口，v3.17 加入 ksud 兜底，v3.18 可固定 root 入口）
 
 开关打开后，微信里所有走定位回调的地方都会拿到设置页填的坐标：发送位置、
 附近的人/直播、小程序定位、朋友圈定位等。
@@ -158,6 +158,19 @@ ksud 扮演 su            KernelSU 兜底（/data/adb/ksu/bin/ksud、/data/adb/k
 `cmd activity force-stop`，外加 `su 0 am force-stop <pkg>` 的 argv 形式。
 单次 6 秒超时，超时即 `destroyForcibly()`。
 
+### 查看并固定 root 入口（v3.18）
+
+设置页「一键结束微信后台」下面多了一行：**「检测 root 入口」按钮 + 入口下拉**。
+
+- 点**检测**：跑一遍探测，把结果直接显示在按钮下方 ——
+  `root 入口：xxx｜uid 检查：0`、`root 方案：KernelSU`，同时写进 logcat
+  （tag `Wxcj/MainActivity`）。探测只执行 `id -u`，不做任何别的。
+- **在下拉里把它固定住**：之后跳过全部探测，直接命中，**零探测开销**。
+  选「自动（用探测结果）」则回到自动模式（会清掉缓存重新探测）。
+
+自动探测在换 root 方案或授权被撤销时会把候选挨个试一遍（每次 fork 一个进程、
+最坏要等超时），固定之后就省掉这部分。
+
 **KernelSU 用户必看**：需要在 KernelSU 管理器 → 超级用户里**给「MM」授予 root 权限**。
 未授权时 sucompat 不会为 MM 的 UID 做重定向，ksud 兜底入口同样会被拒绝。
 失败时按钮下方会显示识别到的 root 方案和针对性排查提示。
@@ -204,9 +217,9 @@ ksud 扮演 su            KernelSU 兜底（/data/adb/ksu/bin/ksud、/data/adb/k
 
 1. 推到自己的 GitHub 仓库（保证 `gradle/wrapper/gradle-wrapper.jar` 一起提交）。
 2. push 到 main/master 即构建，产物在 Artifacts，约 3–6 分钟。
-3. 发 Release：`git tag v3.17 && git push origin v3.17`。
+3. 发 Release：`git tag v3.18 && git push origin v3.18`。
 
-产物：`MM-v3.17.apk`（release 复用 debug 签名，可直接安装）。
+产物：`MM-v3.18.apk`（release 复用 debug 签名，可直接安装）。
 
 ### 修掉的坑：killall / pkill 的副作用
 
